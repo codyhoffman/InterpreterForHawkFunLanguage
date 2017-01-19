@@ -1,0 +1,86 @@
+{ 
+ (* File Project/Lexer.fsl 
+    Lexer for HawkFun, a small functional language
+    S. Knepper, 2016-12-05
+    C. Hoffman, 2016-12-05
+  *)
+
+module Lexer 
+
+open Microsoft.FSharp.Text.Lexing
+open Parser
+
+let lexemeAsString lexbuf = 
+    LexBuffer<char>.LexemeString lexbuf
+
+(* Start of outermost comment currently being scanned *)
+let commentStart = ref Position.Empty;  
+ 
+let commentDepth = ref 0;  (* Current comment nesting *)
+
+(* Distinguish keywords from identifiers: *)
+
+let keyword s =
+    match s with
+    | "bool"  -> BOOL 
+    | "else"  -> ELSE 
+    | "end"   -> END
+    | "false" -> FALSE
+    | "fn"    -> FN 
+    | "fun"   -> FUN
+    | "hd"    -> HD
+    | "tl"    -> TL
+    | "if"    -> IF
+    | "in"    -> IN
+    | "int"   -> INT 
+    | "ise"   -> ISE
+    | "list"  -> LIST
+    | "local" -> LOCAL
+    | "not"   -> NOT
+    | "null"  -> NULL
+    | "print" -> PRINT
+    | "rec"   -> REC
+    | "unit"  -> UNIT
+    | "var"   -> VAR
+    | "then"  -> THEN
+    | "true"  -> TRUE
+    | _       -> NAME s
+}
+
+rule Token = parse
+  | [' ' '\t' '\r'] { Token lexbuf }
+  | '\n'            { lexbuf.EndPos <- lexbuf.EndPos.NextLine; Token lexbuf }
+  | ['0'-'9']+      { NAT (System.Int32.Parse (lexemeAsString lexbuf)) }
+  | ['a'-'z''A'-'Z']['a'-'z''A'-'Z''0'-'9']*
+                    { keyword (lexemeAsString lexbuf) }
+  | "(*"            { commentStart := lexbuf.StartPos;
+                      commentDepth := 1; 
+                      SkipComment lexbuf; Token lexbuf }
+  | '='             { EQ }
+  | "<>"            { NE }
+  | '<'             { LT }
+  | "->"            { ARROW }
+  | '+'             { PLUS }                     
+  | '-'             { MINUS }                     
+  | '*'             { TIMES }                     
+  | '/'             { DIV }                     
+  | '('             { LPAR }
+  | ')'             { RPAR }
+  | ';'             { SEMICOL }
+  | ':'             { COL }
+  | "::"            { DCOL }
+  | "<="            { LTEQ }
+  | "=>"            { DARROW }
+  | "[]"            { EL }
+  | eof             { EOF }
+  | _               { failwith "Lexer error: illegal symbol" }
+
+and SkipComment = parse
+    "*)"            { commentDepth := !commentDepth - 1;  
+                      if !commentDepth = 0 then ()
+                      else SkipComment lexbuf 
+                    } 
+   | "(*"           { commentDepth := !commentDepth + 1; 
+                      SkipComment lexbuf }
+   | eof            { failwith "Lexer error: unterminated comment" }
+   | _              { SkipComment lexbuf }
